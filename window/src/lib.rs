@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use bitflags::bitflags;
 use config::window::WindowLevel;
-use config::{ConfigHandle, Dimension, GeometryOrigin};
+use config::{ConfigHandle, Dimension, GeometryOrigin, RgbaColor};
 use promise::Future;
 use std::any::Any;
 use std::path::PathBuf;
@@ -285,6 +285,8 @@ pub trait WindowOps {
 
     /// Use for windows snap layouts
     fn set_maximize_button_position(&self, _rect: ScreenRect) {}
+
+    fn set_titlebar_bg(&self, color: RgbaColor);
 
     /// Requests the windowing system to start a window drag.
     ///

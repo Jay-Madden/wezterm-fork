@@ -23,16 +23,16 @@ use cocoa::appkit::{
 };
 use cocoa::base::*;
 use cocoa::foundation::{
-    NSArray, NSAutoreleasePool, NSFastEnumeration, NSInteger, NSNotFound, NSPoint, NSRect, NSSize,
-    NSUInteger,
+    NSArray, NSAutoreleasePool, NSFastEnumeration, NSInteger, NSNotFound, NSPoint, NSRect, NSSize, NSString, NSUInteger
 };
 use config::window::WindowLevel;
-use config::ConfigHandle;
+use config::{ConfigHandle, RgbaColor};
 use core_foundation::base::{CFTypeID, TCFType};
 use core_foundation::bundle::{CFBundleGetBundleWithIdentifier, CFBundleGetFunctionPointerForName};
 use core_foundation::data::{CFData, CFDataGetBytePtr, CFDataRef};
 use core_foundation::string::{CFString, CFStringRef, UniChar};
 use core_foundation::{declare_TCFType, impl_TCFType};
+use core_graphics::color::CGColor;
 use objc::declare::ClassDecl;
 use objc::rc::{StrongPtr, WeakPtr};
 use objc::runtime::{Class, Object, Protocol, Sel};
@@ -44,7 +44,7 @@ use raw_window_handle::{
 };
 use std::any::Any;
 use std::cell::RefCell;
-use std::ffi::c_void;
+use std::ffi::{c_void, CStr};
 use std::path::PathBuf;
 use std::ptr::NonNull;
 use std::rc::Rc;
@@ -770,6 +770,13 @@ impl WindowOps for Window {
         });
     }
 
+    fn set_titlebar_bg(&self, color: RgbaColor) {
+        Connection::with_window_inner(self.id, move |inner| {
+            let _ = inner.update_titlebar_bg(color);
+            Ok(())
+        });
+    }
+
     fn invalidate(&self) {
         Connection::with_window_inner(self.id, |inner| {
             inner.invalidate();
@@ -1109,6 +1116,19 @@ impl WindowInner {
         }
     }
 
+    fn update_titlebar_bg(&mut self, color: RgbaColor){
+        unsafe {
+            let titlebar_view_container = get_titlebar_view_container(&self.window).unwrap();
+            let layer: id = msg_send![*titlebar_view_container.load(), layer];
+
+            log::warn!("Setting titlebar bg color to {:?}", color);
+
+            let srgb_cgcolor = srgb(color.0.into(), color.1.into(),color.2.into(),color.3.into());
+
+            let _: () = msg_send![layer, setBackgroundColor: srgb_cgcolor];
+        }
+    }
+
     fn update_window_background_blur(&mut self) {
         unsafe {
             CGSSetWindowBackgroundBlurRadius(
@@ -1137,6 +1157,8 @@ impl WindowInner {
                 self.config.window_decorations,
                 self.config.integrated_title_button_style,
             );
+
+            self.update_titlebar_bg(self.config.window_frame.active_titlebar_bg);
 
             self.window.makeKeyAndOrderFront_(nil)
         }
@@ -1326,6 +1348,11 @@ fn apply_decorations_to_window(
     integrated_title_button_style: IntegratedTitleButtonStyle,
 ) {
     let mask = decoration_to_mask(decorations, integrated_title_button_style);
+    //let mask = NSWindowStyleMask::NSTitledWindowMask
+    //        | NSWindowStyleMask::NSClosableWindowMask
+    //        | NSWindowStyleMask::NSMiniaturizableWindowMask
+    //        | NSWindowStyleMask::NSResizableWindowMask
+    //        | NSWindowStyleMask::NSFullSizeContentViewWindowMask;
     let decorations = effective_decorations(decorations, integrated_title_button_style);
     unsafe {
         window.setStyleMask_(mask);
@@ -1347,17 +1374,38 @@ fn apply_decorations_to_window(
             let button = window.standardWindowButton_(*titlebar_button);
             let _: () = msg_send![button, setHidden: hidden];
         }
+        
+        //let class_name: id = msg_send![window.contentView(), className];
+        //let cstr = CStr::from_ptr(class_name.UTF8String()).to_str().unwrap() ;
+        //log::warn!("FOOBAR: {}", cstr );
+        //
+        //let superview: id = msg_send![window.contentView(), superview];
+        //let class_name: id = msg_send![superview, className];
+        //let cstr = CStr::from_ptr(class_name.UTF8String()).to_str().unwrap() ;
+        //
+        //let subviews: id = msg_send![superview, subviews];
+        //let count: usize = msg_send![subviews, count];
+        //log::warn!("BARFOO: {}, {}", cstr, count);
+        //for i in 0..count {
+        //    let subview: id = msg_send![subviews, objectAtIndex: i];
+        //    let class_name: id = msg_send![subview, className];
+        //    let cstr = CStr::from_ptr(class_name.UTF8String()).to_str().unwrap() ;
+        //    log::warn!("Subview name: {}", cstr );
+        //
+        //    if  cstr == "NSTitlebarContainerView" {
+        //        let layer: id = msg_send![subview, layer];
+        //        let red_color = core_graphics::color::CGColor::rgb(1.0, 0.0, 0.0, 1.0);
+        //        let bkg: () = msg_send![layer, setBackgroundColor: red_color];
+        //    }
+        //}
 
-        window.setTitleVisibility_(if decorations.contains(WindowDecorations::TITLE) {
-            appkit::NSWindowTitleVisibility::NSWindowTitleVisible
-        } else {
-            appkit::NSWindowTitleVisibility::NSWindowTitleHidden
-        });
+        window.setTitleVisibility_(appkit::NSWindowTitleVisibility::NSWindowTitleVisible);
         if decorations.contains(WindowDecorations::INTEGRATED_BUTTONS) {
             window.setTitlebarAppearsTransparent_(YES);
         } else {
             window.setTitlebarAppearsTransparent_(hidden);
         }
+        window.setTitlebarAppearsTransparent_(YES);
     }
 }
 
@@ -1398,6 +1446,51 @@ fn decoration_to_mask(
             | NSWindowStyleMask::NSClosableWindowMask
             | NSWindowStyleMask::NSMiniaturizableWindowMask
             | NSWindowStyleMask::NSResizableWindowMask
+    }
+}
+
+fn get_view_class_name(id: id) -> Option<String> {
+    unsafe {
+        let class_name: id = msg_send![id, className];
+        let cstr = CStr::from_ptr(class_name.UTF8String()).to_str();
+        return match cstr {
+            Ok(s) => Some(s.to_string()),
+            Err(_) => None,
+        }
+    }
+}
+
+unsafe fn get_titlebar_view_container(window: &StrongPtr) -> Option<WeakPtr> {
+
+    let super_view = get_view_superview(window.contentView()).unwrap();
+    
+    let subviews = get_view_subviews(*super_view.load()).unwrap();
+    let count: usize = msg_send![*subviews.load(), count];
+
+    for i in 0..count {
+        let subview: id = msg_send![*subviews.load(), objectAtIndex: i];
+        let class_name = get_view_class_name(subview).unwrap();
+        if class_name == "NSTitlebarContainerView" {
+            return Some(WeakPtr::new(subview));
+        }
+    }
+
+    None
+}
+
+fn get_view_superview(id: id) -> Option<WeakPtr> {
+    unsafe {
+        let super_view_id: id = msg_send![id, superview];
+        let super_view = WeakPtr::new(super_view_id);
+        Some(super_view)
+    }
+}
+
+fn get_view_subviews(id: id) -> Option<WeakPtr> {
+    unsafe {
+        let sub_views_id: id = msg_send![id, subviews];
+        let sub_views = WeakPtr::new(sub_views_id);
+        Some(sub_views)
     }
 }
 
@@ -1759,6 +1852,23 @@ fn key_modifiers(flags: NSEventModifierFlags) -> Modifiers {
     }
 
     mods
+}
+
+
+fn srgb(red: CGFloat, green: CGFloat, blue: CGFloat, alpha: CGFloat) -> CGColor {
+    unsafe {
+        let ptr = CGColorCreateSRGB(red, green, blue, alpha);
+        CGColor::wrap_under_create_rule(ptr)
+    }
+}
+
+extern "C" {
+    fn CGColorCreateSRGB(
+        red: CGFloat,
+        green: CGFloat,
+        blue: CGFloat,
+        alpha: CGFloat,
+    ) -> core_graphics::sys::CGColorRef;
 }
 
 /// We register our own subclass of NSWindow so that we can override
