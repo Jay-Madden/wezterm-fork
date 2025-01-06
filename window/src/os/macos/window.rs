@@ -1110,10 +1110,14 @@ impl WindowInner {
         }
     }
 
-    fn update_titlebar_bg(&self, color: RgbaColor) {
+    fn update_titlebar_background(&self, color: RgbaColor) {
         unsafe {
             let titlebar_view_container = get_titlebar_view_container(&self.window).unwrap();
             let layer: id = msg_send![*titlebar_view_container.load(), layer];
+
+            if layer.is_null() {
+                return
+            }
 
             // We need to make sure to convert the config color into an sRGB CGColor or the color will be slightly off
             let srgb_cgcolor = srgb(
@@ -1156,7 +1160,7 @@ impl WindowInner {
                 self.config.integrated_title_button_style,
             );
 
-            self.update_titlebar_bg(self.config.window_frame.active_titlebar_bg);
+            self.update_titlebar_background(self.config.window_frame.active_titlebar_bg);
 
             self.window.makeKeyAndOrderFront_(nil)
         }
