@@ -1372,7 +1372,11 @@ fn apply_decorations_to_window(
             let _: () = msg_send![button, setHidden: hidden];
         }
 
-        window.setTitleVisibility_(appkit::NSWindowTitleVisibility::NSWindowTitleVisible);
+        window.setTitleVisibility_(if decorations.contains(WindowDecorations::TITLE) {
+            appkit::NSWindowTitleVisibility::NSWindowTitleVisible
+        } else {
+            appkit::NSWindowTitleVisibility::NSWindowTitleHidden
+        });
         if decorations.contains(WindowDecorations::INTEGRATED_BUTTONS) {
             window.setTitlebarAppearsTransparent_(YES);
         } else {
