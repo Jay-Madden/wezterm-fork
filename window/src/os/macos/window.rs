@@ -1382,9 +1382,6 @@ fn apply_decorations_to_window(
         } else {
             window.setTitlebarAppearsTransparent_(hidden);
         }
-
-        window.setTitleVisibility_(appkit::NSWindowTitleVisibility::NSWindowTitleVisible);
-        window.setTitlebarAppearsTransparent_(YES);
     }
 }
 
