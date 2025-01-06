@@ -771,13 +771,6 @@ impl WindowOps for Window {
         });
     }
 
-    fn set_titlebar_bg(&self, color: RgbaColor) {
-        Connection::with_window_inner(self.id, move |inner| {
-            let _ = inner.update_titlebar_bg(color);
-            Ok(())
-        });
-    }
-
     fn invalidate(&self) {
         Connection::with_window_inner(self.id, |inner| {
             inner.invalidate();
@@ -1445,6 +1438,9 @@ unsafe fn get_view_class_name(id: id) -> Option<String> {
 }
 
 fn get_titlebar_view_container(window: &StrongPtr) -> Option<WeakPtr> {
+    
+    // The view container for the titlebar on macos is found next to the primary window view 
+    // so we need to traverse up to the super view to find it
     let super_view = get_view_superview(window)?;
 
     let sub_views = get_view_subviews(&super_view.load())?;

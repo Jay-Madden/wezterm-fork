@@ -286,8 +286,6 @@ pub trait WindowOps {
     /// Use for windows snap layouts
     fn set_maximize_button_position(&self, _rect: ScreenRect) {}
 
-    fn set_titlebar_bg(&self, color: RgbaColor);
-
     /// Requests the windowing system to start a window drag.
     ///
     /// This is only implemented on backends that handle
