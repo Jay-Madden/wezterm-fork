@@ -1382,6 +1382,9 @@ fn apply_decorations_to_window(
         } else {
             window.setTitlebarAppearsTransparent_(hidden);
         }
+
+        window.setTitleVisibility_(appkit::NSWindowTitleVisibility::NSWindowTitleVisible);
+        window.setTitlebarAppearsTransparent_(YES);
     }
 }
 
@@ -1486,7 +1489,7 @@ fn get_view_superview(view: &StrongPtr) -> Option<WeakPtr> {
 
 fn get_view_subviews(view: &StrongPtr) -> Option<WeakPtr> {
 
-    let sub_views_id: id = unsafe { msg_send![view.contentView(), subviews] };
+    let sub_views_id: id = unsafe { msg_send![**view, subviews] };
     if sub_views_id.is_null() {
         return None
     }
