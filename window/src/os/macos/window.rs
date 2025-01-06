@@ -1378,7 +1378,6 @@ fn apply_decorations_to_window(
         } else {
             window.setTitlebarAppearsTransparent_(hidden);
         }
-        window.setTitlebarAppearsTransparent_(YES);
     }
 }
 
